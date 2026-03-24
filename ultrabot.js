@@ -518,34 +518,56 @@ async function tick() {
       boosterBlockReasons.push(`${n} КД=${cdMin(n).toFixed(0)}мин`);
   }
 
-  // ── Вода: покупаем агрессивно ─────────────────────────────────────────────
+  // ── Вода ─────────────────────────────────────────────────────────────────────
   if (canBuy(N.WATER)) {
     if (currentEnergy + 1 > MAX_ENERGY) {
-      const reason =
+      tg(
         `💧 Вода готова (+1), но ⚡${currentEnergy}=10 — переполнение! 🚫\n` +
-        `🎮 Играю сначала, потом куплю воду`;
-      tg(reason);
+          `🎮 Играю, потом куплю воду`,
+      );
       await playGame("пред-вода");
       return;
     }
+
+    if (minsLeft <= 0 && currentEnergy < MAX_ENERGY) {
+      // Все КД готовы, копим к 10 — вода ускоряет набор на ~30мин
+      tg(
+        `💧 Покупаю воду (+1) — ускоряю набор до 10 ⚡${currentEnergy}→${currentEnergy + 1}\n` +
+          `✔️ Все КД готовы, копим! Вода +1 каждые 20мин вместо 10мин рег`,
+      );
+      await purchase(N.WATER, ITEM_ENERGY[N.WATER]);
+      return;
+    }
+
     if (minsLeft > 22) {
-      const reason =
-        `💧 Покупаю воду (+1 энергии)\n` +
-        `⏳ До бустера ${minsLeft.toFixed(0)}мин > 22мин — КД (20мин) успеет ✔️`;
-      tg(reason);
+      // КД ещё далеко — играем пассивную энергию, потом покупаем воду (net zero)
+      if (currentEnergy > 0) {
+        tg(
+          `🎮💧 Играю 1 на пассивной, потом куплю воду (net zero) ⚡${currentEnergy}\n` +
+            `⏳ До бустера ${minsLeft.toFixed(0)}мин — КД воды (20мин) успеет ✔️`,
+        );
+        await playGame("пред-вода");
+        return;
+      }
+      tg(
+        `💧 Покупаю воду (+1) ⚡0→1\n` +
+          `⏳ До бустера ${minsLeft.toFixed(0)}мин > 22мин — КД успеет ✔️`,
+      );
       await purchase(N.WATER, ITEM_ENERGY[N.WATER]);
       return;
     }
+
     if (currentEnergy === 0) {
-      const reason =
+      tg(
         `💧 Покупаю воду (+1) — ⚡0, нечем играть!\n` +
-        `⏳ До бустера ${minsLeft.toFixed(0)}мин < 22мин, но простой хуже 🚫`;
-      tg(reason);
+          `⏳ До бустера ${minsLeft.toFixed(0)}мин < 22мин, но простой хуже 🚫`,
+      );
       await purchase(N.WATER, ITEM_ENERGY[N.WATER]);
       return;
     }
+
     console.log(
-      `💧 Вода готова, но до бустера ${minsLeft.toFixed(1)}мин < 22мин и energy=${currentEnergy} > 0 — держу для условия покупки.`,
+      `💧 Вода готова, до бустера ${minsLeft.toFixed(1)}мин < 22мин, ⚡${currentEnergy}>0 — держу для условия`,
     );
   }
 
@@ -603,29 +625,25 @@ async function tick() {
     return;
   }
 
-  if (minsLeft <= 0) {
-    // Все КД готовы, но энергия < 10 — играем, т.к. держать бессмысленно:
-    // рег +1/10мин идёт независимо от текущей энергии
-    const reason =
-      `🎮 [ПЕРЕРЫВ] Все КД готовы ✔️ но ⚡${currentEnergy}<10\n` +
-      `🔄 Рег идёт (+1/10мин) — играю пока жду набора до 10`;
-    console.log(reason);
-    await playGame("ПЕРЕРЫВ");
-    return;
-  }
-
-  // КД ещё не готовы и нет излишка — КОПИМ энергию к бустеру
+  // Нет излишка — КОПИМ энергию. Вода покупается выше (ускоряет набор).
   const chocolateNote =
     !chocolateBoughtThisBreak && canBuy(N.CHOCOLATE)
       ? ` | 🍫 готов`
       : !chocolateBoughtThisBreak
         ? ` | 🍫 через ${cdMin(N.CHOCOLATE).toFixed(0)}мин`
         : "";
-  const waitSec = Math.min(60, Math.max(20, Math.floor(minsLeft * 4)));
-  const reason =
-    `🔋 Коплю ⚡${currentEnergy} → нужно 10 к бустеру\n` +
-    `📈 Прогноз (${minsLeft.toFixed(0)}мин): ${projected}/10 | после игры: ${projectedAfterPlay}/10 < 10 ❌${chocolateNote}\n` +
-    `⏳ Жду ${waitSec}с | 🔒 [${boosterBlockReasons.join("; ")}]`;
+  const waterNote = canBuy(N.WATER)
+    ? `💧 готова`
+    : `💧 через ${cdMin(N.WATER).toFixed(0)}мин`;
+  const allCdsReady = minsLeft <= 0;
+  const waitSec = allCdsReady ? 45 : Math.min(60, Math.max(20, Math.floor(minsLeft * 4)));
+  const reason = allCdsReady
+    ? `🔋 Коплю ⚡${currentEnergy}/10 — все КД готовы ✔️\n` +
+      `📦 Рег +1/10мин + ${waterNote}\n` +
+      `⏳ Жду ${waitSec}с до следующей проверки`
+    : `🔋 Коплю ⚡${currentEnergy}/10 → бустер через ${minsLeft.toFixed(0)}мин\n` +
+      `📈 Прогноз: ${projected}/10 | после игры: ${projectedAfterPlay}/10 < 10 ❌${chocolateNote}\n` +
+      `⏳ Жду ${waitSec}с | 🔒 [${boosterBlockReasons.join("; ")}]`;
   tg(reason);
   await sleep(waitSec * 1_000);
 }

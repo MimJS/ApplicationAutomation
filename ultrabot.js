@@ -353,7 +353,13 @@ function boostRemMin() {
 }
 
 function minsToBooster() {
-  return cdMin(N.BOOSTER);
+  return Math.max(
+    cdMin(N.BOOSTER),
+    cdMin(N.BURGER),
+    cdMin(N.COFFEE),
+    cdMin(N.CHOCOLATE),
+    cdMin(N.WATER),
+  );
 }
 
 function canBuyBooster() {
@@ -582,23 +588,30 @@ async function tick() {
 
   const projected = projectEnergyAtBooster(minsLeft);
 
-  // Играем только при РЕАЛЬНОМ излишке (projected > 10, а не = 10).
-  // При projected = 10 — шоколад или рег. покроют ровно дефицит, игра нарушит баланс.
   if (projected > MAX_ENERGY) {
+    // Есть реальный излишек — играем
     const surplus = projected - MAX_ENERGY;
     const reason =
       `🎮 [ПЕРЕРЫВ] Трачу энергию (${currentEnergy}). Излишек: +${surplus}.\n` +
-      `Прогноз к бустеру (${minsLeft.toFixed(0)}мин): ~${projected}/10 — есть реальный излишек, трачу.`;
+      `Прогноз к бустеру (${minsLeft.toFixed(0)}мин): ~${projected}/10 — трачу.`;
     console.log(reason);
     await playGame("ПЕРЕРЫВ");
     return;
   }
 
-  // Держим энергию — пассивная рег + вода + шоколад наберут ровно 10 к бустеру
-  const waitSec = Math.min(
-    60,
-    Math.max(20, minsLeft > 0 ? Math.floor(minsLeft * 6) : 30),
-  );
+  if (minsLeft > 12) {
+    // Бустер далеко (>12 мин) — ТЗ: "не оставлять энергию замороженной".
+    // Лучше сыграть и заработать очки, чем сидеть. Энергия восстановится рег+вода.
+    const reason =
+      `🎮 [ПЕРЕРЫВ] Бустер далеко (${minsLeft.toFixed(0)}мин), не простаиваю.\n` +
+      `Прогноз: ${projected}/10, но ещё ${minsLeft.toFixed(0)}мин до КД — играю.`;
+    console.log(reason);
+    await playGame("ПЕРЕРЫВ");
+    return;
+  }
+
+  // Бустер близко (<=12 мин) — держим энергию, каждая единица важна для набора 10
+  const waitSec = Math.min(60, Math.max(15, Math.floor(minsLeft * 5)));
   const chocolateNote =
     !chocolateBoughtThisBreak && canBuy(N.CHOCOLATE)
       ? ` | 🍫 шоколад доступен`
@@ -606,10 +619,10 @@ async function tick() {
         ? ` | 🍫 шоколад через ${cdMin(N.CHOCOLATE).toFixed(0)}мин`
         : "";
   const reason =
-    `⏳ Держу ${currentEnergy} энергии (без игры).\n` +
-    `Прогноз к бустеру (${minsLeft.toFixed(0)}мин): ${projected}/10 — дефицит, рег. покроет.${chocolateNote}\n` +
+    `⏳ Держу ${currentEnergy} энергии — бустер БЛИЗКО (${minsLeft.toFixed(0)}мин).\n` +
+    `Прогноз: ${projected}/10. Жду рег.${chocolateNote}\n` +
     `Жду ${waitSec}с. Бустер: [${boosterBlockReasons.join("; ")}]`;
-  await tg(reason);
+  tg(reason);
   await sleep(waitSec * 1_000);
 }
 

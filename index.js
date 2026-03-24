@@ -374,11 +374,15 @@ async function prepareOfferIds() {
 
     const totalOffers = response?.data?.offers;
     OFFER_IDS.BOOSTER =
-      totalOffers.find((v) => v.name == "Мульти заказы")?.id || null;
-    OFFER_IDS.BURGER = totalOffers.find((v) => v.name == "Бургер")?.id || null;
-    OFFER_IDS.WATER = totalOffers.find((v) => v.name == "Вода")?.id || null;
-    OFFER_IDS.CACAO = totalOffers.find((v) => v.name == "Шоколад")?.id || null;
-    OFFER_IDS.COFFEE = totalOffers.find((v) => v.name == "Кофе")?.id || null;
+      (await totalOffers.find((v) => v.name == "Мульти заказы")?.id) || null;
+    OFFER_IDS.BURGER =
+      (await totalOffers.find((v) => v.name == "Бургер")?.id) || null;
+    OFFER_IDS.WATER =
+      (await totalOffers.find((v) => v.name == "Вода")?.id) || null;
+    OFFER_IDS.CACAO =
+      (await totalOffers.find((v) => v.name == "Шоколад")?.id) || null;
+    OFFER_IDS.COFFEE =
+      (await totalOffers.find((v) => v.name == "Кофе")?.id) || null;
 
     await customTelegramMessage(
       `✅ Получены офферы: ${JSON.stringify(OFFER_IDS)}`,

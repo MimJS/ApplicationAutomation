@@ -638,20 +638,115 @@ async function saveRating() {
 
 // ─── ИНИЦИАЛИЗАЦИЯ СОСТОЯНИЯ ИЗ ДАННЫХ МАГАЗИНА ──────────────────────────────
 function initStateFromShop() {
+  const now = Date.now();
   const booster = shopData[N.BOOSTER];
+  const chocolate = shopData[N.CHOCOLATE];
+  const lines = [];
+
+  // Текущие КД всех предметов
+  const cdStatus = {};
+  for (const name of [N.BOOSTER, N.BURGER, N.COFFEE, N.CHOCOLATE, N.WATER]) {
+    const rem = cdMin(name);
+    cdStatus[name] = rem;
+    const purchAt = shopData[name]?.purchasedAt;
+    const purchStr = purchAt
+      ? `куплен ${((now - purchAt.getTime()) / 60_000).toFixed(0)}мин назад`
+      : "никогда";
+    lines.push(
+      `  ${name}: ${rem > 0 ? `КД ${rem.toFixed(1)}мин` : "готов"} (${purchStr})`,
+    );
+  }
+
+  // Максимальный КД — через сколько все будут готовы
+  const maxCd = Math.max(...Object.values(cdStatus));
+  const bottleneck = Object.entries(cdStatus).find(([, v]) => v === maxCd)?.[0];
+
+  // ─── Фаза 1: Бустер активен ──────────────────────────────────────────────
   if (booster?.purchasedAt) {
-    const elapsed = Date.now() - booster.purchasedAt.getTime();
+    const elapsed = now - booster.purchasedAt.getTime();
+
     if (elapsed < BOOST_DURATION_MS) {
       boosterEndTime = booster.purchasedAt.getTime() + BOOST_DURATION_MS;
-      // Если энергия уже слита — считаем drain завершённым
-      drainComplete = currentEnergy === 0;
-      const remMin = ((boosterEndTime - Date.now()) / 60_000).toFixed(1);
-      console.log(
-        `⚡ Обнаружен активный бустер! Осталось: ${remMin}мин, ` +
-          `энергия: ${currentEnergy}, drain: ${drainComplete}`,
+      const remMin = (boosterEndTime - now) / 60_000;
+
+      // Определяем drain: если энергия низкая И бустер куплен недавно
+      // (первые ~4мин = слив 10 энергий), drain ещё не завершён
+      const boostElapsedMin = elapsed / 60_000;
+      if (currentEnergy === 0 || boostElapsedMin > 5) {
+        drainComplete = true;
+      } else {
+        drainComplete = false;
+      }
+
+      lines.push(
+        `\n🔥 БУСТЕР АКТИВЕН! Осталось ${remMin.toFixed(1)}мин`,
+        `  drain: ${drainComplete ? "завершён" : "в процессе"} (energy=${currentEnergy})`,
       );
+      tg(
+        `🤖 UltraBot: подключаюсь к АКТИВНОМУ бустеру\n` +
+          `⚡ Энергия: ${currentEnergy} | Бустер ещё ${remMin.toFixed(1)}мин\n` +
+          `Drain: ${drainComplete ? "завершён → играю" : "продолжаю слив"}\n` +
+          lines.join("\n"),
+      );
+      return;
     }
+
+    // ─── Фаза 2: Бустер истёк — мы в перерыве ────────────────────────────────
+    const boosterEndedAt = booster.purchasedAt.getTime() + BOOST_DURATION_MS;
+    const breakElapsedMin = (now - boosterEndedAt) / 60_000;
+
+    // Шоколад: куплен ли ПОСЛЕ окончания бустера?
+    if (chocolate?.purchasedAt) {
+      const chocTime = chocolate.purchasedAt.getTime();
+      chocolateBoughtThisBreak = chocTime > boosterEndedAt;
+    }
+
+    // Оценка сыгранных игр в перерыве:
+    // За breakElapsedMin минут: пассивная рег ~1/10мин + вода ~1/20мин + шоколад 2 раз
+    // Грубо: ~1 игра на каждые 7-8 минут перерыва
+    gamesPlayedSinceBoostEnded = Math.min(20, Math.floor(breakElapsedMin / 7));
+
+    lines.push(
+      `\n⏳ ПЕРЕРЫВ: бустер кончился ${breakElapsedMin.toFixed(0)}мин назад`,
+      `  Шоколад в перерыве: ${chocolateBoughtThisBreak ? "уже куплен" : "не куплен"}`,
+      `  ~${gamesPlayedSinceBoostEnded} игр сыграно (оценка)`,
+      `  Все КД готовы через: ${maxCd.toFixed(0)}мин (узкое место: ${bottleneck})`,
+      `  До бустера: нужно ещё energy=${MAX_ENERGY - currentEnergy} и ${maxCd.toFixed(0)}мин КД`,
+    );
+  } else {
+    // ─── Фаза 3: Бустер никогда не покупался ─────────────────────────────────
+    lines.push(
+      `\n🆕 Бустер ещё не покупался.`,
+      `  Все КД готовы через: ${maxCd.toFixed(0)}мин (узкое место: ${bottleneck || "—"})`,
+    );
   }
+
+  // Прогноз: когда можно купить бустер
+  const minsLeft = maxCd;
+  const projected = projectEnergyAtBooster(minsLeft);
+  const energyGap = MAX_ENERGY - currentEnergy;
+  const passiveRegenMin = energyGap * 10;
+
+  let readyInMin;
+  if (canBuyBooster()) {
+    readyInMin = 0;
+  } else {
+    readyInMin = Math.max(maxCd, passiveRegenMin);
+  }
+
+  lines.push(
+    `\n📊 ПРОГНОЗ:`,
+    `  Энергия сейчас: ${currentEnergy}/${MAX_ENERGY}`,
+    `  Прогноз энергии к бустеру: ~${projected}/${MAX_ENERGY}`,
+    `  Бустер возможен через: ~${readyInMin.toFixed(0)} мин`,
+    readyInMin === 0 ? `  ✅ Бустер можно купить ПРЯМО СЕЙЧАС!` : "",
+  );
+
+  const report = lines.filter(Boolean).join("\n");
+  console.log(report);
+  tg(
+    `🤖 UltraBot запущен — выравнивание цикла:\n⚡ Энергия: ${currentEnergy}\n${report}`,
+  );
 }
 
 // ─── ГЛАВНЫЙ ЦИКЛ ────────────────────────────────────────────────────────────
@@ -665,13 +760,6 @@ async function main() {
   await refreshShop(true);
   await refreshEnergy(true);
   initStateFromShop();
-
-  await tg(
-    `🤖 UltraBot запущен!\n` +
-      `⚡ Энергия: ${currentEnergy}\n` +
-      `📊 Цикл: ~83 мин | Бустер: +30% на 20 мин\n` +
-      `🎯 Цель: максимум очков под бустером`,
-  );
 
   const loop = async () => {
     try {

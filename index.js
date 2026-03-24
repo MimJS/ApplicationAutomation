@@ -383,7 +383,7 @@ async function main() {
   }
   await login();
 
-  if (process.env.BUY_BOOSTER) {
+  if (process.env.BUY_BOOSTER === "1") {
     buyBooster();
   }
 

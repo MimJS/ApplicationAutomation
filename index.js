@@ -461,12 +461,12 @@ async function main() {
     process.exit(1);
   }
   await login();
+  await prepareOfferIds();
 
   if (process.env.BUY_BOOSTER === "1") {
     buyBooster();
   }
 
-  prepareOfferIds();
   await checkEnergy();
 }
 

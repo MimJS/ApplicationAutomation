@@ -387,7 +387,7 @@ async function sendTelegramNotification(ratingDelta, userData) {
   }
 
   try {
-    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+    await axios.post(`${process.env.TELEGRAM_URL}${token}/sendMessage`, {
       chat_id: chatId,
       text: `🎉 Игра завершена!\nНовый рейтинг: +${ratingDelta} очков\n\nРейтинг всего: ${userData?.rating}\nДенег: ${userData?.money}`,
     });
@@ -407,7 +407,7 @@ async function sendTelegramNotificationByEnergy(name) {
   }
 
   try {
-    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+    await axios.post(`${process.env.TELEGRAM_URL}${token}/sendMessage`, {
       chat_id: chatId,
       text: `🔸 Куплен ${name}`,
     });
@@ -426,7 +426,7 @@ async function sendTelegramNotificationLogin(error) {
   }
 
   try {
-    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+    await axios.post(`${process.env.TELEGRAM_URL}${token}/sendMessage`, {
       chat_id: chatId,
       text: `❌ Ошибка авторизации: ${error}`,
     });
@@ -445,7 +445,7 @@ async function customTelegramMessage(message) {
   }
 
   try {
-    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+    await axios.post(`${process.env.TELEGRAM_URL}${token}/sendMessage`, {
       chat_id: chatId,
       text: message || "Пустое сообщение",
     });

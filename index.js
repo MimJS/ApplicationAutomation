@@ -26,6 +26,14 @@ const OFFER_IDS = {
   BOOSTER: null,
 };
 
+const TIMEOUTS = {
+  BURGER: null,
+  COFFEE: null,
+  CACAO: null,
+  WATER: null,
+  BOOSTER: null,
+};
+
 async function login() {
   const payload = {
     telegramSessionValidationDto: {
@@ -235,6 +243,8 @@ async function playOneGame() {
 }
 
 async function buyBurger() {
+  clearTimeout(TIMEOUTS.BURGER);
+
   try {
     if (!OFFER_IDS.BURGER) {
       throw new Error("no id");
@@ -248,17 +258,19 @@ async function buyBurger() {
       },
     );
     sendTelegramNotificationByEnergy("Бургер");
-    setTimeout(buyBurger, 60000);
+    TIMEOUTS.BURGER = setTimeout(buyBurger, 60000);
   } catch (error) {
     console.error(
       "❌ Бургер не куплен:",
       error.response?.data || error.message,
     );
-    setTimeout(buyBurger, 60000);
+    TIMEOUTS.BURGER = setTimeout(buyBurger, 60000);
   }
 }
 
 async function buyCoffee() {
+  clearTimeout(TIMEOUTS.COFFEE);
+
   try {
     if (!OFFER_IDS.COFFEE) {
       throw new Error("no id");
@@ -272,14 +284,16 @@ async function buyCoffee() {
       },
     );
     sendTelegramNotificationByEnergy("Кофе");
-    setTimeout(buyCoffee, 60000);
+    TIMEOUTS.COFFEE = setTimeout(buyCoffee, 60000);
   } catch (error) {
     console.error("❌ Кофе не куплен:", error.response?.data || error.message);
-    setTimeout(buyCoffee, 60000);
+    TIMEOUTS.COFFEE = setTimeout(buyCoffee, 60000);
   }
 }
 
 async function buyCacao() {
+  clearTimeout(TIMEOUTS.CACAO);
+
   try {
     if (!OFFER_IDS.CACAO) {
       throw new Error("no id");
@@ -293,17 +307,19 @@ async function buyCacao() {
       },
     );
     sendTelegramNotificationByEnergy("Шоколадка");
-    setTimeout(buyCacao, 60000);
+    TIMEOUTS.CACAO = setTimeout(buyCacao, 60000);
   } catch (error) {
     console.error(
       "❌ Шоколадка не куплена:",
       error.response?.data || error.message,
     );
-    setTimeout(buyCacao, 60000);
+    TIMEOUTS.CACAO = setTimeout(buyCacao, 60000);
   }
 }
 
 async function buyWater() {
+  clearTimeout(TIMEOUTS.WATER);
+
   try {
     if (!OFFER_IDS.WATER) {
       throw new Error("no id");
@@ -317,14 +333,16 @@ async function buyWater() {
       },
     );
     sendTelegramNotificationByEnergy("Вода");
-    setTimeout(buyWater, 60000);
+    TIMEOUTS.WATER = setTimeout(buyWater, 60000);
   } catch (error) {
     console.error("❌ Вода не куплена:", error.response?.data || error.message);
-    setTimeout(buyWater, 60000);
+    TIMEOUTS.WATER = setTimeout(buyWater, 60000);
   }
 }
 
 async function buyBooster() {
+  clearTimeout(TIMEOUTS.BOOSTER);
+
   try {
     if (!OFFER_IDS.BOOSTER) {
       throw new Error("no id");
@@ -338,13 +356,13 @@ async function buyBooster() {
       },
     );
     sendTelegramNotificationByEnergy("Бустер");
-    setTimeout(buyBooster, 60000);
+    TIMEOUTS.BOOSTER = setTimeout(buyBooster, 60000);
   } catch (error) {
     console.error(
       "❌ Бустер не куплена:",
       error.response?.data || error.message,
     );
-    setTimeout(buyBooster, 60000);
+    TIMEOUTS.BOOSTER = setTimeout(buyBooster, 60000);
   }
 }
 

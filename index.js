@@ -1,5 +1,12 @@
 import "dotenv/config";
 import axios from "axios";
+import nodeCron from "node-cron";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import path, { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const BASE_URL = "https://ritm-dostavki.ru/api/v1";
 
@@ -497,4 +504,46 @@ async function main() {
   await checkEnergy();
 }
 
+async function saveRating() {
+  if (!accessToken) {
+    customTelegramMessage("❌ Не удалось сохранить рейтинг. Нет авторизации");
+    return;
+  }
+
+  try {
+    const result = await axios.get(
+      `${BASE_URL}/rating/get_top?PageNotationRequestDto.Page=1&PageNotationRequestDto.PageSize=200`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    const date = new Date();
+    const iso = date.toISOString();
+
+    if (result?.data?.topPlayers?.items) {
+      fs.writeFile(
+        path.join(__dirname, "rating_data", `${iso}.json`),
+        JSON.stringify(result?.data?.topPlayers?.items),
+        () => {
+          customTelegramMessage(`💎 Рейтинг сохранён: ${iso}`);
+        },
+      );
+    }
+    await customTelegramMessage(`👀 #${result?.data?.myPlace} текущее место`);
+  } catch (e) {
+    console.error("❌ Не удалось сохранить рейтинг:", e.message);
+    await customTelegramMessage(
+      `❌ Не удалось сохранить рейтинг ${String(e.message)}`,
+    );
+  }
+}
+
 main().catch(console.error);
+
+nodeCron.schedule("0 0 * * *", () => {
+  saveRating();
+});

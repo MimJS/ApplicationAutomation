@@ -18,6 +18,14 @@ const telegramMiniAppConnectionDto = {
   performanceClass: "",
 };
 
+const OFFER_IDS = {
+  BURGER: null,
+  COFFEE: null,
+  CACAO: null,
+  WATER: null,
+  BOOSTER: null,
+};
+
 async function login() {
   const payload = {
     telegramSessionValidationDto: {
@@ -218,6 +226,9 @@ async function playOneGame() {
     console.log(`Осталось жизней: ${currentEnergy}`);
   } catch (error) {
     console.error("❌ Ошибка игры:", error.response?.data || error.message);
+    customTelegramMessage(
+      `❌ Ошибка игры: ${String(error.response?.data || error.message)}`,
+    );
     if (error.response?.status === 401) await login();
     currentEnergy--; // чтобы не застрять в цикле
   }
@@ -225,8 +236,12 @@ async function playOneGame() {
 
 async function buyBurger() {
   try {
+    if (!OFFER_IDS.BURGER) {
+      throw new Error("no id");
+    }
+
     await axios.post(
-      `${BASE_URL}/shop/purchase_offer?id=6c86ca06-6f51-47ac-9cb8-9c3025e3c3a0`,
+      `${BASE_URL}/shop/purchase_offer?id=${OFFER_IDS.BURGER}`,
       {},
       {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -245,8 +260,12 @@ async function buyBurger() {
 
 async function buyCoffee() {
   try {
+    if (!OFFER_IDS.COFFEE) {
+      throw new Error("no id");
+    }
+
     await axios.post(
-      `${BASE_URL}/shop/purchase_offer?id=7c9fa3b2-c315-45ed-93ee-7d5ca93ea84b`,
+      `${BASE_URL}/shop/purchase_offer?id=${OFFER_IDS.COFFEE}`,
       {},
       {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -262,8 +281,12 @@ async function buyCoffee() {
 
 async function buyCacao() {
   try {
+    if (!OFFER_IDS.CACAO) {
+      throw new Error("no id");
+    }
+
     await axios.post(
-      `${BASE_URL}/shop/purchase_offer?id=e4c10a07-e886-47c0-8eef-7f4d9c8f2194`,
+      `${BASE_URL}/shop/purchase_offer?id=${OFFER_IDS.CACAO}`,
       {},
       {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -282,8 +305,12 @@ async function buyCacao() {
 
 async function buyWater() {
   try {
+    if (!OFFER_IDS.WATER) {
+      throw new Error("no id");
+    }
+
     await axios.post(
-      `${BASE_URL}/shop/purchase_offer?id=e3c1bcb0-8d2f-4331-b931-0c6d06560d12`,
+      `${BASE_URL}/shop/purchase_offer?id=${OFFER_IDS.WATER}`,
       {},
       {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -299,8 +326,12 @@ async function buyWater() {
 
 async function buyBooster() {
   try {
+    if (!OFFER_IDS.BOOSTER) {
+      throw new Error("no id");
+    }
+
     await axios.post(
-      `${BASE_URL}/shop/purchase_offer?id=039a2054-d785-46fd-b256-5d444fd06696`,
+      `${BASE_URL}/shop/purchase_offer?id=${OFFER_IDS.BOOSTER}`,
       {},
       {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -314,6 +345,35 @@ async function buyBooster() {
       error.response?.data || error.message,
     );
     setTimeout(buyBooster, 60000);
+  }
+}
+
+async function prepareOfferIds() {
+  try {
+    const response = await axios.get(`${BASE_URL}/shop/get_offers`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const totalOffers = response?.data?.offers;
+    OFFER_IDS.BOOSTER =
+      totalOffers.find((v) => v.name == "Мульти заказы")?.id || null;
+    OFFER_IDS.BURGER = totalOffers.find((v) => v.name == "Бургер")?.id || null;
+    OFFER_IDS.WATER = totalOffers.find((v) => v.name == "Вода")?.id || null;
+    OFFER_IDS.CACAO = totalOffers.find((v) => v.name == "Шоколад")?.id || null;
+    OFFER_IDS.COFFEE = totalOffers.find((v) => v.name == "Кофе")?.id || null;
+
+    await customTelegramMessage(
+      `✅ Получены офферы: ${JSON.stringify(OFFER_IDS)}`,
+    );
+  } catch (error) {
+    console.error(
+      "❌ Не получилось получить офферы:",
+      error.response?.data || error.message,
+    );
+    await customTelegramMessage(
+      `❌ Не получилось получить офферы: ${String(error.response?.data || error.message)}`,
+    );
+    setTimeout(prepareOfferIds, 60000);
   }
 }
 
@@ -376,6 +436,25 @@ async function sendTelegramNotificationLogin(error) {
   }
 }
 
+async function customTelegramMessage(message) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId) {
+    return;
+  }
+
+  try {
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+      chat_id: chatId,
+      text: message || "Пустое сообщение",
+    });
+    console.log("📨 Уведомление отправлено в Telegram");
+  } catch (e) {
+    console.error("❌ Не удалось отправить в TG:", e.message);
+  }
+}
+
 async function main() {
   if (!process.env.TELEGRAM_VALIDATION_STRING) {
     console.error("❌ Добавь TELEGRAM_VALIDATION_STRING в .env");
@@ -387,6 +466,7 @@ async function main() {
     buyBooster();
   }
 
+  prepareOfferIds();
   await checkEnergy();
 }
 

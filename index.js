@@ -34,6 +34,12 @@ const TIMEOUTS = {
   BOOSTER: null,
 };
 
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 async function login() {
   const payload = {
     telegramSessionValidationDto: {
@@ -199,12 +205,17 @@ async function playOneGame() {
       },
     );
 
+    const time = await getRandomInt(
+      process.env.GAME_TIME_MIN,
+      process.env.GAME_TIME_MAX,
+    );
+
     console.log("✅ Игра запущена...");
-    console.log("⏳ Ждём 30 секунд...");
-    await new Promise((r) => setTimeout(r, 30000));
+    console.log(`⏳ Ждём ${time} секунд...`);
+    await new Promise((r) => setTimeout(r, time * 1000));
 
     // Финальный запрос (логично end_game_session по структуре API)
-    const finishPayload = { durationSeconds: 30, bonuses: 16 };
+    const finishPayload = { durationSeconds: time, bonuses: 16 };
     const result = await axios.post(
       `${BASE_URL}/game_session/end_game_session`,
       finishPayload,

@@ -1,0 +1,346 @@
+import "dotenv/config";
+import axios from "axios";
+
+const BASE_URL = "https://ritm-dostavki.ru/api/v1";
+
+let accessToken = "";
+let tokenExpiresAt = null;
+let currentEnergy = 0;
+
+const telegramMiniAppConnectionDto = {
+  appVersion: "9.5",
+  manufacturer: "",
+  model: "",
+  userAgent:
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+  sdkVersion: "tdesktop",
+  androidVersion: "",
+  performanceClass: "",
+};
+
+async function login() {
+  const payload = {
+    telegramSessionValidationDto: {
+      validationString: process.env.TELEGRAM_VALIDATION_STRING,
+    },
+    telegramMiniAppConnectionDto,
+  };
+
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/telegram_auth/login`,
+      payload,
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+
+    accessToken = response.data.accessToken;
+    tokenExpiresAt = new Date(response.data.tokenExpiresAt);
+
+    console.log(
+      `✅ Логин успешен. Токен истекает: ${tokenExpiresAt.toISOString()}`,
+    );
+    scheduleTokenRefresh();
+  } catch (error) {
+    console.error("❌ Ошибка логина:", error.response?.data || error.message);
+    process.exit(1);
+  }
+}
+
+function scheduleTokenRefresh() {
+  const now = Date.now();
+  const expires = tokenExpiresAt.getTime();
+  let msBeforeExpiry = expires - now - 5 * 60 * 1000; // за 5 минут
+
+  if (msBeforeExpiry < 0) msBeforeExpiry = 0;
+
+  setTimeout(async () => {
+    console.log("🔄 Автообновление токена...");
+    await login();
+  }, msBeforeExpiry);
+}
+
+async function checkEnergy() {
+  try {
+    const response = await axios.get(
+      `${BASE_URL}/player/get_stat_by_id?statName=energy_current`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+
+    currentEnergy = response.data.stat.currentValue;
+    console.log(`⚡ Энергия: ${currentEnergy}`);
+
+    if (currentEnergy <= 0) {
+      if (process.env.BUY_BURGER === "1") {
+        buyBurger();
+      }
+
+      if (process.env.BUY_COFFEE === "1") {
+        buyCoffee();
+      }
+
+      if (process.env.BUY_CACAO === "1") {
+        buyCacao();
+      }
+
+      if (process.env.BUY_WATER === "1") {
+        buyWater();
+      }
+    }
+
+    if (currentEnergy > 0) {
+      await playAllGames();
+      console.log("Все игры сыграны. Проверка энергии через 60 сек...");
+      setTimeout(checkEnergy, 60000);
+    } else {
+      console.log("Энергии нет → ждём 60 секунд");
+      setTimeout(checkEnergy, 60000);
+    }
+  } catch (error) {
+    console.error(
+      "❌ Ошибка проверки энергии:",
+      error.response?.data || error.message,
+    );
+    if (error.response?.status === 401) await login();
+    setTimeout(checkEnergy, 60000);
+  }
+}
+
+async function playAllGames() {
+  while (currentEnergy > 0) {
+    await playOneGame();
+  }
+}
+
+async function playOneGame() {
+  try {
+    try {
+      console.log("🎮 Создаём игровую сессию...");
+
+      await axios.post(
+        `${BASE_URL}/game_session/create_game_session`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      console.log("✅ Сессия создана");
+    } catch (error) {
+      // Обработка ошибки "Game session already exists"
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (
+          errorData?.errors?.some(
+            (err) => err.errorCode === "Game session already exists",
+          )
+        ) {
+          console.log(
+            "⚠️ Сессия уже существует — пропускаем создание и получаем текущий seed",
+          );
+
+          const response = await axios.get(
+            `${BASE_URL}/game_session/get_game_session_seed`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+            },
+          );
+
+          console.log("✅ Seed сессии найден", response?.data?.seed);
+          // Игнорируем ошибку и идём дальше к start_game_session
+        } else {
+          throw error; // другая 400 ошибка — пробрасываем
+        }
+      } else {
+        throw error; // любая другая ошибка
+      }
+    }
+
+    const gamePayload = {
+      challengeType: 1,
+      startTime: new Date().toISOString(),
+    };
+    await axios.post(
+      `${BASE_URL}/game_session/start_game_session`,
+      gamePayload,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    console.log("✅ Игра запущена...");
+    console.log("⏳ Ждём 30 секунд...");
+    await new Promise((r) => setTimeout(r, 30000));
+
+    // Финальный запрос (логично end_game_session по структуре API)
+    const finishPayload = { durationSeconds: 30, bonuses: 16 };
+    const result = await axios.post(
+      `${BASE_URL}/game_session/end_game_session`,
+      finishPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    console.log("✅ Игра завершена!", result.data);
+
+    const ratingDelta = result.data.ratingDelta || 0;
+    const currentRatingResponse = await axios.get(`${BASE_URL}/user/get_full`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    await sendTelegramNotification(ratingDelta, {
+      money: currentRatingResponse?.data?.user?.player?.money || 0,
+      rating: currentRatingResponse?.data?.user?.player?.rating || 0,
+    });
+
+    currentEnergy--;
+    console.log(`Осталось жизней: ${currentEnergy}`);
+  } catch (error) {
+    console.error("❌ Ошибка игры:", error.response?.data || error.message);
+    if (error.response?.status === 401) await login();
+    currentEnergy--; // чтобы не застрять в цикле
+  }
+}
+
+async function buyBurger() {
+  try {
+    await axios.post(
+      `${BASE_URL}/shop/purchase_offer?id=6c86ca06-6f51-47ac-9cb8-9c3025e3c3a0`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    sendTelegramNotificationByEnergy("Бургер");
+    setTimeout(buyBurger, 60000);
+  } catch (error) {
+    console.error(
+      "❌ Бургер не куплен:",
+      error.response?.data || error.message,
+    );
+    setTimeout(buyBurger, 60000);
+  }
+}
+
+async function buyCoffee() {
+  try {
+    await axios.post(
+      `${BASE_URL}/shop/purchase_offer?id=7c9fa3b2-c315-45ed-93ee-7d5ca93ea84b`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    sendTelegramNotificationByEnergy("Кофе");
+    setTimeout(buyCoffee, 60000);
+  } catch (error) {
+    console.error("❌ Кофе не куплен:", error.response?.data || error.message);
+    setTimeout(buyCoffee, 60000);
+  }
+}
+
+async function buyCacao() {
+  try {
+    await axios.post(
+      `${BASE_URL}/shop/purchase_offer?id=e4c10a07-e886-47c0-8eef-7f4d9c8f2194`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    sendTelegramNotificationByEnergy("Шоколадка");
+    setTimeout(buyCacao, 60000);
+  } catch (error) {
+    console.error(
+      "❌ Шоколадка не куплена:",
+      error.response?.data || error.message,
+    );
+    setTimeout(buyCacao, 60000);
+  }
+}
+
+async function buyWater() {
+  try {
+    await axios.post(
+      `${BASE_URL}/shop/purchase_offer?id=e3c1bcb0-8d2f-4331-b931-0c6d06560d12`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    sendTelegramNotificationByEnergy("Вода");
+    setTimeout(buyWater, 60000);
+  } catch (error) {
+    console.error("❌ Вода не куплена:", error.response?.data || error.message);
+    setTimeout(buyWater, 60000);
+  }
+}
+
+async function sendTelegramNotification(ratingDelta, userData) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId) {
+    console.log(`📈 +${ratingDelta} очков рейтинга`);
+    return;
+  }
+
+  try {
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+      chat_id: chatId,
+      text: `🎉 Игра завершена!\nНовый рейтинг: +${ratingDelta} очков\n\nРейтинг всего: ${userData?.rating}\nДенег: ${userData?.money}`,
+    });
+    console.log("📨 Уведомление отправлено в Telegram");
+  } catch (e) {
+    console.error("❌ Не удалось отправить в TG:", e.message);
+  }
+}
+
+async function sendTelegramNotificationByEnergy(name) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId) {
+    console.log(`🎉 Куплен: ${name}`);
+    return;
+  }
+
+  try {
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+      chat_id: chatId,
+      text: `🔸 Куплен ${name}`,
+    });
+    console.log("📨 Уведомление отправлено в Telegram");
+  } catch (e) {
+    console.error("❌ Не удалось отправить в TG:", e.message);
+  }
+}
+
+async function main() {
+  if (!process.env.TELEGRAM_VALIDATION_STRING) {
+    console.error("❌ Добавь TELEGRAM_VALIDATION_STRING в .env");
+    process.exit(1);
+  }
+  await login();
+  await checkEnergy();
+}
+
+main().catch(console.error);

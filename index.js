@@ -505,11 +505,16 @@ async function main() {
     buyWater();
   }
 
+  if (process.env.TEST_RATING_GET === "1") {
+    saveRating();
+  }
+
   await checkEnergy();
 }
 
 async function saveRating() {
   if (!accessToken) {
+    console.error("❌ Не удалось сохранить рейтинг. Нет авторизации");
     customTelegramMessage("❌ Не удалось сохранить рейтинг. Нет авторизации");
     return;
   }
@@ -548,6 +553,6 @@ async function saveRating() {
 
 main().catch(console.error);
 
-nodeCron.schedule("0 0 * * *", () => {
+nodeCron.schedule("0 * * * *", () => {
   saveRating();
 });

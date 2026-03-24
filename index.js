@@ -44,6 +44,9 @@ async function login() {
     scheduleTokenRefresh();
   } catch (error) {
     console.error("❌ Ошибка логина:", error.response?.data || error.message);
+    await sendTelegramNotificationLogin(
+      String(error.response?.data || error.message),
+    );
     process.exit(1);
   }
 }
@@ -327,6 +330,25 @@ async function sendTelegramNotificationByEnergy(name) {
     await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
       chat_id: chatId,
       text: `🔸 Куплен ${name}`,
+    });
+    console.log("📨 Уведомление отправлено в Telegram");
+  } catch (e) {
+    console.error("❌ Не удалось отправить в TG:", e.message);
+  }
+}
+
+async function sendTelegramNotificationLogin(error) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId) {
+    return;
+  }
+
+  try {
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+      chat_id: chatId,
+      text: `❌ Ошибка авторизации: ${error}`,
     });
     console.log("📨 Уведомление отправлено в Telegram");
   } catch (e) {

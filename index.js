@@ -297,6 +297,26 @@ async function buyWater() {
   }
 }
 
+async function buyBooster() {
+  try {
+    await axios.post(
+      `${BASE_URL}/shop/purchase_offer?id=039a2054-d785-46fd-b256-5d444fd06696`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    sendTelegramNotificationByEnergy("Бустер");
+    setTimeout(buyBooster, 60000);
+  } catch (error) {
+    console.error(
+      "❌ Бустер не куплена:",
+      error.response?.data || error.message,
+    );
+    setTimeout(buyBooster, 60000);
+  }
+}
+
 async function sendTelegramNotification(ratingDelta, userData) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -362,6 +382,11 @@ async function main() {
     process.exit(1);
   }
   await login();
+
+  if (process.env.BUY_BOOSTER) {
+    buyBooster();
+  }
+
   await checkEnergy();
 }
 

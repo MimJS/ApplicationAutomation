@@ -134,7 +134,7 @@ async function playOneGame() {
     try {
       console.log("🎮 Создаём игровую сессию...");
 
-      await axios.post(
+      const createGameSession = await axios.post(
         `${BASE_URL}/game_session/create_game_session`,
         {},
         {
@@ -145,7 +145,7 @@ async function playOneGame() {
         },
       );
 
-      console.log("✅ Сессия создана");
+      console.log("✅ Сессия создана", JSON.stringify(createGameSession?.data));
     } catch (error) {
       // Обработка ошибки "Game session already exists"
       if (error.response?.status === 400) {
